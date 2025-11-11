@@ -1,3 +1,6 @@
 from django.contrib import admin
 
-# Register your models here.
+from template_service.models import Template
+
+admin.site.site_header = "Template Service Admin"
+admin.site.register(Template)

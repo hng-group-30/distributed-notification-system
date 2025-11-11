@@ -1,4 +1,4 @@
-def get_attr(exc: Exception, attr: str, default: None):
+def get_attr(exc: Exception, attr: str, default=None):
     if hasattr(exc, attr):
         value = getattr(exc, attr)
         return value

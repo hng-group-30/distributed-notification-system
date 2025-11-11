@@ -14,4 +14,4 @@ def global_exception_handler(request, exc):
     detail = get_attr(exc, "detail") or str(exc)
     status_code = get_status_code(exc, default=500)
     response_data = {"message": message, "error": detail}
-    api.create_response(request, response_data, status=status_code)
+    return api.create_response(request, response_data, status=status_code)

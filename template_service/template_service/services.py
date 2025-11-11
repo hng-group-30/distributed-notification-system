@@ -42,7 +42,11 @@ class TemplateService:
                 "context": old_template.context,
             }
             new_template_data.update(update_payload_dict)
-            new_template_data["version"] = old_template.get_latest_version() + 1
+            latest_template = old_template.get_latest_version()
+            latest_version = (
+                latest_template.version if latest_template else old_template.version
+            )
+            new_template_data["version"] = latest_version + 1
             new_template = Template.objects.create(**new_template_data)
             logger.info(
                 f"Template {new_template.name} updated: "

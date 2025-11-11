@@ -91,3 +91,30 @@ class TemplateResponse(ModelSchema):
 
 class TemapleteDataResponse(ApiResponseData[TemplateResponse]):
     pass
+
+
+class TemplatesQuerySchema(Schema):
+    page: Optional[int] = Field(1, ge=1, description="Page number for pagination")
+    limit: Optional[int] = Field(
+        20, ge=1, le=100, description="Number of items per page"
+    )
+    category: Optional[TemplateCategory] = Field(
+        None, description="Filter templates by category"
+    )
+    language: Optional[str] = Field(
+        None, description="Filter templates by language code", examples=["en", "fr"]
+    )
+
+
+class PaginationMeta(Schema):
+    total: int = Field(..., description="Total number of items")
+    limit: int = Field(..., description="Total number of pages")
+    page: int = Field(..., description="Current page number")
+    total_pages: int = Field(..., description="Number of items per page")
+    has_next: bool = Field(..., description="Indicates if there is a next page")
+    has_previous: bool = Field(..., description="Indicates if there is a previous page")
+
+
+class TemplateListResponse(ApiResponse):
+    data: List[TemplateResponse] = Field(..., description="List of templates")
+    meta: PaginationMeta = Field(..., description="Pagination metadata")

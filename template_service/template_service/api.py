@@ -1,9 +1,11 @@
-from ninja import Router
+from ninja import Query, Router
 
 from template_service.schemas import (
     CreateTemplate,
     ErrorResponse,
     TemapleteDataResponse,
+    TemplateListResponse,
+    TemplatesQuerySchema,
     UpdateTemplate,
 )
 from template_service.services import TemplateService
@@ -34,3 +36,10 @@ def update_template(request, template_id: str, payload: UpdateTemplate):
         "message": "Template updated successfully",
         "data": template,
     }
+
+
+@router.get("/templates", response={200: TemplateListResponse})
+def get_all_templates(request, query: Query[TemplatesQuerySchema]):
+    data = TemplateService.get_all_templates(query)
+    data["message"] = "Templates retrieved successfully"
+    return data

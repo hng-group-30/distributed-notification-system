@@ -1,5 +1,7 @@
 import logging
 
+from django.core.paginator import Paginator
+
 from template_service.exceptions import NotFound
 from template_service.models import Template
 from template_service.schemas import CreateTemplate
@@ -9,6 +11,17 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateService:
+    @staticmethod
+    def create_pagination_meta(paginator, page_obj):
+        return {
+            "total": paginator.count,
+            "limit": paginator.per_page,
+            "page": page_obj.number,
+            "total_pages": paginator.num_pages,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+
     @classmethod
     def create_template(cls, payload: CreateTemplate):
         payload_dict = schema_to_dict(payload)
@@ -57,3 +70,24 @@ class TemplateService:
         except Template.DoesNotExist:
             logger.error(f"Template with ID: {template_id} does not exist")
             raise NotFound(detail=f"Template with id {template_id} not found")
+
+    @classmethod
+    def get_all_templates(cls, query):
+        try:
+            query_dict = schema_to_dict(query)
+            queryset = Template.objects.filter(is_deleted=False)
+            if query_dict.get("category"):
+                queryset = queryset.filter(category=query_dict["category"])
+            if query_dict.get("language") is not None:
+                queryset = queryset.filter(language=query_dict["language"])
+
+            paginator = Paginator(
+                queryset.order_by("-created_at"), query_dict.get("limit", 20)
+            )
+            page_obj = paginator.get_page(query_dict.get("page", 1))
+            return {
+                "data": page_obj.object_list,
+                "meta": cls.create_pagination_meta(paginator, page_obj),
+            }
+        except Exception:
+            return {}

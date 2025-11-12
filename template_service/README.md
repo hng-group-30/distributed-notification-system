@@ -104,13 +104,19 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 
 6. **Run the development server**
    ```bash
-   python manage.py runserver
+   make run
    ```
+
+Once development server is running, access the API documentation at:
+
+```http
+http://localhost:8000/api/docs/
+```
 
 ## API Endpoints
 
 ### 1. Create Template
-- **Endpoint**: `POST /api/templates`
+- **Endpoint**: `POST /api/v1/template-service/templates`
 - **Description**: Creates a new template
 
 **Request Body Example:**
@@ -146,7 +152,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
 ### 2. Update Template
-- **Endpoint**: `PATCH /api/templates/{template_id}`
+- **Endpoint**: `PATCH /api/v1/template-service/templates/{template_id}`
 - **Description**: Updates an existing template (creates new version)
 
 **Request Body Example:**
@@ -177,7 +183,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
 ### 3. Get All Templates
-- **Endpoint**: `GET /api/templates`
+- **Endpoint**: `GET /api/v1/template-service/templates`
 - **Description**: Retrieves paginated list of templates with optional filtering
 
 **Query Parameters:**
@@ -188,7 +194,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 
 **Example Request:**
 ```bash
-GET /api/templates?page=1&limit=10&category=email&language=en
+GET /api/v1/template-service/templates?page=1&limit=10&category=email&language=en
 ```
 
 **Response Example:**
@@ -221,12 +227,12 @@ GET /api/templates?page=1&limit=10&category=email&language=en
 ```
 
 ### 4. Get Template by ID
-- **Endpoint**: `GET /api/templates/{template_id}`
+- **Endpoint**: `GET /api/v1/template-service/templates/{template_id}`
 - **Description**: Retrieves a specific template by its ID
 
 **Example Request:**
 ```bash
-GET /api/templates/550e8400-e29b-41d4-a716-446655440000
+GET /api/v1/template-service/templates/550e8400-e29b-41d4-a716-446655440000
 ```
 
 **Response Example:**
@@ -249,7 +255,7 @@ GET /api/templates/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ### 5. Render Template
-- **Endpoint**: `POST /api/render`
+- **Endpoint**: `POST /api/v1/template-service/templates/render`
 - **Description**: Renders a template with provided context variables
 
 **Request Body Example (by template name):**
@@ -293,12 +299,12 @@ GET /api/templates/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ### 6. Delete Template
-- **Endpoint**: `DELETE /api/templates/{template_id}`
+- **Endpoint**: `DELETE /api/v1/template-service/templates/{template_id}`
 - **Description**: Soft deletes a template
 
 **Example Request:**
 ```bash
-DELETE /api/templates/550e8400-e29b-41d4-a716-446655440000
+DELETE /api/v1/template-service/templates/550e8400-e29b-41d4-a716-446655440000
 ```
 
 **Response Example:**

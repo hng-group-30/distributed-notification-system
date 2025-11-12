@@ -1,6 +1,8 @@
 import logging
 import re
+from typing import Optional
 
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import ObjectDoesNotExist
 
@@ -12,7 +14,34 @@ from template_service.utils import schema_to_dict
 logger = logging.getLogger(__name__)
 
 
+class TemplateCacheKeys:
+    """Central cache key management"""
+
+    @staticmethod
+    def template_by_id(template_id: str) -> str:
+        return f"template:id:{template_id}"
+
+    @staticmethod
+    def template_latest(name: str, category: str, language: str) -> str:
+        return f"template:latest:{name}:{category}:{language}"
+
+    @staticmethod
+    def template_versions(name: str, category: str, language: str) -> str:
+        return f"template:versions:{name}:{category}:{language}"
+
+    @staticmethod
+    def template_list_pattern() -> str:
+        return "template:list:*"
+
+    @staticmethod
+    def template_pattern_for(name: str, category: str, language: str) -> str:
+        """Get pattern to invalidate all caches for a specific template"""
+        return f"template:*:{name}:{category}:{language}*"
+
+
 class TemplateService:
+    CACHE_TIMEOUT = 3600  # 1 hour cache timeout
+
     @staticmethod
     def create_pagination_meta(paginator, page_obj):
         return {
@@ -23,6 +52,39 @@ class TemplateService:
             "has_next": page_obj.has_next(),
             "has_previous": page_obj.has_previous(),
         }
+
+    @classmethod
+    def _invalidate_template_cache(
+        cls, name: str, category: str, language: str, template_id: Optional[str] = None
+    ) -> None:
+        """Invalidate all caches related to a template"""
+        keys_to_delete = [
+            TemplateCacheKeys.template_latest(name, category, language),
+            TemplateCacheKeys.template_versions(name, category, language),
+        ]
+
+        if template_id:
+            keys_to_delete.append(TemplateCacheKeys.template_by_id(template_id))
+
+        cache.delete_many(keys_to_delete)
+
+        try:
+            pattern = TemplateCacheKeys.template_list_pattern()
+            cache_keys = cache.keys(pattern) if hasattr(cache, "keys") else []
+            if cache_keys:
+                cache.delete_many(cache_keys)
+        except Exception as e:
+            logger.warning(f"Could not delete pattern-based cache: {e}")
+
+    @classmethod
+    def _get_cached_template(cls, cache_key: str) -> Optional[Template]:
+        """Get template from cache"""
+        return cache.get(cache_key)
+
+    @classmethod
+    def _set_cached_template(cls, cache_key: str, template: Template) -> None:
+        """Set template in cache"""
+        cache.set(cache_key, template, cls.CACHE_TIMEOUT)
 
     @classmethod
     def create_template(cls, payload: CreateTemplate):
@@ -40,7 +102,13 @@ class TemplateService:
         if existing_template:
             payload_dict["version"] = existing_template.version + 1
         template = Template.objects.create(**payload_dict)
-        logger.info(f"Template {template.name} created with ID: {template.id}")
+        logger.info(
+            f"Template {template.name} created with ID: {template.id} version: {template.version}"
+        )
+        cls._invalidate_template_cache(
+            template.name, template.category, template.language, template.id
+        )
+
         return template
 
     @classmethod
@@ -63,6 +131,12 @@ class TemplateService:
             )
             new_template_data["version"] = latest_version + 1
             new_template = Template.objects.create(**new_template_data)
+            cls._invalidate_template_cache(
+                new_template.name,
+                new_template.category,
+                new_template.language,
+                template_id,
+            )
             logger.info(
                 f"Template {new_template.name} updated: "
                 f"old version {old_template.version} (ID: {old_template.id}) -> "
@@ -77,6 +151,17 @@ class TemplateService:
     def get_all_templates(cls, query):
         try:
             query_dict = schema_to_dict(query)
+            cache_key = (
+                f"template:list:"
+                f"{query_dict.get('category', 'all')}:"
+                f"{query_dict.get('language', 'all')}:"
+                f"page:{query_dict.get('page', 1)}:"
+                f"limit:{query_dict.get('limit', 20)}"
+            )
+            cached_result = cache.get(cache_key)
+            if cached_result:
+                logger.debug(f"Cache hit for template list: {cache_key}")
+                return cached_result
             queryset = Template.objects.filter(is_deleted=False)
             if query_dict.get("category"):
                 queryset = queryset.filter(category=query_dict["category"])
@@ -87,20 +172,50 @@ class TemplateService:
                 queryset.order_by("-created_at"), query_dict.get("limit", 20)
             )
             page_obj = paginator.get_page(query_dict.get("page", 1))
-            return {
+            result = {
                 "data": page_obj.object_list,
                 "meta": cls.create_pagination_meta(paginator, page_obj),
+                "message": "Templates retrieved successfully",
             }
+
+            cache.set(cache_key, result, cls.CACHE_TIMEOUT // 2)
+            logger.debug(f"Cached template list: {cache_key}")
+            return result
         except Exception:
-            return {}
+            return {
+                "data": [],
+                "meta": {
+                    "total": 0,
+                    "limit": 20,
+                    "page": 1,
+                    "total_pages": 0,
+                    "has_next": False,
+                    "has_previous": False,
+                },
+                "message": "Templates retrieved successfully",
+            }
 
     @classmethod
     def get_template_by_id(cls, template_id):
-        template = Template.objects.filter(id=template_id).first()
+        cache_key = TemplateCacheKeys.template_by_id(template_id)
+        template = cls._get_cached_template(cache_key)
+        if template:
+            logger.debug(f"Cache hit for template ID: {template_id}")
+            return template
+
+        template = Template.objects.filter(id=template_id, is_deleted=False).first()
+        if template:
+            cls._set_cached_template(cache_key, template)
+            logger.debug(f"Cached template ID: {template_id}")
         return template
 
     @classmethod
     def get_latest_template(cls, name, category, language):
+        cache_key = TemplateCacheKeys.template_latest(name, category, language)
+        cached_template = cls._get_cached_template(cache_key)
+        if cached_template:
+            logger.debug(f"Cache hit for latest template: {name}/{category}/{language}")
+            return cached_template
         template = (
             Template.objects.filter(
                 name=name,
@@ -116,6 +231,9 @@ class TemplateService:
         if not template:
             logger.warning(f"No active template found for {name}/{category}/{language}")
             raise ValueError(f"Template '{name}' ({category}, {language}) not found")
+
+        cls._set_cached_template(cache_key, template)
+        logger.debug(f"Cached latest template: {name}/{category}/{language}")
 
         return template
 
@@ -189,3 +307,33 @@ class TemplateService:
 
         pattern = r"\{\{(\w+)\}\}"
         return re.sub(pattern, replace_match, text)
+
+    @classmethod
+    def delete_template(cls, template_id):
+        try:
+            template = Template.objects.get(id=template_id, is_deleted=False)
+            template.is_deleted = True
+            template.save(update_fields=["is_deleted", "updated_at"])
+            cls._invalidate_template_cache(
+                template.name, template.category, template.language, template_id
+            )
+
+            logger.info(f"Template '{template.name}' (ID: {template_id}) soft deleted")
+        except Template.DoesNotExist:
+            raise NotFound(detail=f"Template with id {template_id} not found")
+
+    @classmethod
+    def permanently_delete_template(cls, template_id):
+        try:
+            template = Template.objects.get(id=template_id)
+            name = template.name
+            category = template.category
+            language = template.language
+
+            template.delete()
+
+            cls._invalidate_template_cache(name, category, language, template_id)
+
+            logger.info(f"Template '{name}' (ID: {template_id}) permanently deleted")
+        except Template.DoesNotExist:
+            raise NotFound(detail=f"Template with id {template_id} not found")

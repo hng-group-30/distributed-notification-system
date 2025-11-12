@@ -28,6 +28,17 @@ def create_template(request, payload: CreateTemplate):
         return 400, {"success": False, "message": str(e)}
 
 
+@router.post(
+    "templates/render", response={200: RenderedTemplateResponse, 400: ErrorResponse}
+)
+def render_template(request, payload: RenderTemplateRequest):
+    try:
+        data = TemplateService.render_template(payload)
+        return {"message": "Template rendered successfully", "data": data}
+    except Exception as e:
+        return 400, {"success": False, "message": str(e)}
+
+
 @router.patch(
     "/templates/{template_id}",
     response={200: TemapleteDataResponse, 404: ErrorResponse},
@@ -65,15 +76,6 @@ def get_template_by_id(request, template_id: str):
         "message": "Template retrieved successfully",
         "data": template,
     }
-
-
-@router.post("/render", response={200: RenderedTemplateResponse, 400: ErrorResponse})
-def render_template(request, payload: RenderTemplateRequest):
-    try:
-        data = TemplateService.render_template(payload)
-        return {"message": "Template rendered successfully", "data": data}
-    except Exception as e:
-        return 400, {"success": False, "message": str(e)}
 
 
 @router.delete("/templates/{template_id}", response={200: dict, 404: ErrorResponse})

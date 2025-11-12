@@ -35,3 +35,4 @@ build/
 
 ### project specific ###
 src/main/resources/rabbitmq.properties
+src/main/resources/firebase-admin.properties

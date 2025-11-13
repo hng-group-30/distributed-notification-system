@@ -3,6 +3,7 @@ import * as nodemailer from 'nodemailer';
 import * as handlebars from 'handlebars';
 import * as path from 'path';
 import * as fs from 'fs';
+import axios from 'axios';
 import { CircuitBreaker } from '../email/utils/circuit-breaker.utils';
 import { redisClient } from './utils/redis.utils';
 import { StatusPublisher } from './status/status.publisher';
@@ -25,7 +26,7 @@ export class EmailService {
   });
 
   async sendEmail(payload: any) {
-    const idempotencyKey = payload.message_id;
+    const idempotencyKey = payload.request_id;
     if (!this.circuitBreaker.canRequest())
       throw new Error('Circuit breaker open');
 
@@ -35,27 +36,24 @@ export class EmailService {
     }
 
     try {
-      const templatePath = path.resolve(
-        process.cwd(),
-        'src/email/templates/default.hbs',
-      );
-      const template = fs.readFileSync(templatePath, 'utf8');
+      const templateUrl = `https://muizzyranking.pythonanywhere.com/api/v1/templates/${payload.template_code}`;
+      const response = await axios.get(templateUrl);
+      const template = response.data?.html || '<p>{{message}}</p>';
 
       const compiled = handlebars.compile(template);
       const html = compiled({
-        name: payload.recipient_email,
+        name: payload.email,
         message: payload.message,
       });
 
       await this.transporter.sendMail({
         from: process.env.SMTP_USER,
-        to: payload.recipient_email,
-        subject: payload.subject,
+        to: payload.email,
+        subject: payload.template_code || 'Notification',
         html,
       });
 
-      this.logger.log(`Email sent to ${payload.recipient_email}`);
-
+      this.logger.log(`Email sent to ${payload.email}`);
       emailsSent.inc();
 
       await redisClient.set(`email_sent:${idempotencyKey}`, '1', { EX: 86400 });

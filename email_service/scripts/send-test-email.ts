@@ -3,35 +3,35 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
+const rmqUrl = process.env.RABBITMQ_URL || 'amqp://localhost:5672';
+
 async function sendTestEmail() {
   const client = ClientProxyFactory.create({
     transport: Transport.RMQ,
     options: {
-      urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
+      urls: [rmqUrl],
       queue: 'email.queue',
       queueOptions: {
         durable: true,
-        arguments: {
-          'x-dead-letter-exchange': 'notifications.direct',
-          'x-dead-letter-routing-key': 'failed',
-        },
+        arguments: { 'x-max-priority': 10 },
       },
     },
   });
 
   const msg = {
-    message_id: 'test123_' + Date.now(),
-    recipient_email: 'noone12345@nonexistentdomain.com',
-    subject: 'Test Email from NestJS',
-    message: 'Hello! This is a real email test.',
+    request_id: 'test_' + Date.now(),
+    user_id: 'local-test-user',
+    email: 'fowosereademola@gmail.com',
+    message: 'Hello! This is a local test email.',
+    priority: 1,
+    template_code: 'welcome_email',
+    type: 'email',
   };
 
-  try {
-    await client.emit('send_email', msg).toPromise();
-    console.log('Test email job sent');
-  } catch (err) {
-    console.error('Failed to send test email:', err);
-  }
+  client.emit('email', msg).subscribe({
+    next: () => console.log('Test email job sent'),
+    error: (err) => console.error('Failed to send test email:', err),
+  });
 }
 
 sendTestEmail();

@@ -9,6 +9,7 @@ import lombok.Data;
 public class Message {
     private NotificationType type;
     private String userId;
+    private String requestId;
     private String email;
     private String pushToken;
     private String message;

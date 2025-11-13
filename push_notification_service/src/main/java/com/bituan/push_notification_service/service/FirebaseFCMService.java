@@ -1,0 +1,67 @@
+package com.bituan.push_notification_service.service;
+
+import com.bituan.push_notification_service.dto.NotificationStatus;
+import com.bituan.push_notification_service.dto.NotificationStatusResponse;
+import com.google.firebase.messaging.*;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+
+@Service
+public class FirebaseFCMService {
+    private final FirebaseMessaging firebaseMessaging;
+    private final APIGatewayService apiGatewayService;
+
+    @Autowired
+    FirebaseFCMService (FirebaseMessaging firebaseMessaging, APIGatewayService apiGatewayService) {
+        this.firebaseMessaging = firebaseMessaging;
+        this.apiGatewayService = apiGatewayService;
+    }
+
+    @Async
+    @Retryable(
+            retryFor = {RuntimeException.class},
+            maxAttempts = 5, // Maximum number of retry attempts
+            backoff = @Backoff(delay = 1, multiplier = 3) // exponential backoff
+    )
+    @CircuitBreaker(name="myService", fallbackMethod = "failedRetry")
+    public void pushNotification (String token, Notification notification, String notificationId) {
+        Message message = Message.builder().setToken(token).setNotification(notification).build();
+        try {
+            firebaseMessaging.send(message);
+            NotificationStatusResponse response = new NotificationStatusResponse();
+            response.setNotificationId(notificationId);
+            response.setStatus(NotificationStatus.delivered);
+            response.setTimestamp(Instant.now());
+
+            // update notification status
+            apiGatewayService.sendNotificationStatus(response);
+        } catch (FirebaseMessagingException e) {
+            // token validation
+            if (e.getMessagingErrorCode() == MessagingErrorCode.UNREGISTERED) {
+                //update user token to null
+                apiGatewayService.updateUserToken("", null);
+            } else {
+                throw new RuntimeException(notificationId, e);
+            }
+        }
+    }
+
+    // when retry fails, and when circuit breaker opens
+    public void failedRetry (RuntimeException e) {
+        NotificationStatusResponse response = new NotificationStatusResponse();
+        response.setNotificationId(e.getMessage());
+        response.setStatus(NotificationStatus.failed);
+        response.setTimestamp(Instant.now());
+        response.setError("Failed to send. Maximum retry reached");
+
+        // update notification status
+        apiGatewayService.sendNotificationStatus(response);
+    }
+}

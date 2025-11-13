@@ -34,8 +34,6 @@ public class RabbitMQConfig {
     @Bean
     public Queue queue() {
         return QueueBuilder.durable(queue)
-                .withArgument("x-dead-letter-exchange", exchange)
-                .withArgument("x-dead-letter-routing-key", deadRoutingKey)
                 .withArgument("x-max-priority", maxPriority)
                 .build();
     }
@@ -49,7 +47,7 @@ public class RabbitMQConfig {
     public DirectExchange exchange () {
         return ExchangeBuilder
                 .directExchange(exchange)
-                .durable(true)
+                .durable(false)
                 .build();
     }
 

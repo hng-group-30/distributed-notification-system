@@ -10,7 +10,7 @@ export class EmailConsumer {
 
   constructor(private readonly emailService: EmailService) {}
 
-  @EventPattern('send_email')
+  @EventPattern('email')
   async handleEmail(@Payload() data: any, @Ctx() context: RmqContext) {
     const channel = context.getChannelRef();
     const msg = context.getMessage();

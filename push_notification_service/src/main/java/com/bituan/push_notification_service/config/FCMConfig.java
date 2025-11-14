@@ -29,9 +29,13 @@ public class FCMConfig {
             byte[] decodedBytes = Base64.getDecoder().decode(firebaseConfig);
             ByteArrayInputStream serviceAccount = new ByteArrayInputStream(decodedBytes);
 
+            FirebaseOptions firebaseOptions = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(serviceAccount))
+                    .build();
+
             // possible source of error in prod. handle path appropriately then
-            GoogleCredentials googleCredentials = GoogleCredentials.fromStream(new ClassPathResource(firebaseConfig).getInputStream());
-            FirebaseOptions firebaseOptions = FirebaseOptions.builder().setCredentials(googleCredentials).build();
+//            GoogleCredentials googleCredentials = GoogleCredentials.fromStream(new ClassPathResource(firebaseConfigPath).getInputStream());
+//            FirebaseOptions firebaseOptions = FirebaseOptions.builder().setCredentials(googleCredentials).build();
 
             FirebaseApp app = FirebaseApp.initializeApp(firebaseOptions, "push_notification_service");
             return FirebaseMessaging.getInstance(app);

@@ -9,19 +9,28 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.util.Base64;
 
 @Configuration
 public class FCMConfig {
-    @Value("${firebase.config.path}")
-    private String firebaseConfigPath;
+//    @Value("${firebase.config.path}")
+//    private String firebaseConfigPath;
+
+    @Value("${firebase.config}")
+    private String firebaseConfig;
 
     // initialize firebase app for push notification
     @Bean
     public FirebaseMessaging firebaseMessaging () {
         try {
+            // prod version - use base 64 env variable rather than file path
+            byte[] decodedBytes = Base64.getDecoder().decode(firebaseConfig);
+            ByteArrayInputStream serviceAccount = new ByteArrayInputStream(decodedBytes);
+
             // possible source of error in prod. handle path appropriately then
-            GoogleCredentials googleCredentials = GoogleCredentials.fromStream(new ClassPathResource(firebaseConfigPath).getInputStream());
+            GoogleCredentials googleCredentials = GoogleCredentials.fromStream(new ClassPathResource(firebaseConfig).getInputStream());
             FirebaseOptions firebaseOptions = FirebaseOptions.builder().setCredentials(googleCredentials).build();
 
             FirebaseApp app = FirebaseApp.initializeApp(firebaseOptions, "push_notification_service");
